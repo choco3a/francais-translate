@@ -1,0 +1,22 @@
+
+.container {
+  width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.translation {
+  display: flex;
+}
+
+.language-label {
+  text-align: center;
+}
+
+textarea{
+  padding: 10px;
+  height: 100px;
+}
+#keep-button {
+  height: 100px;
+}

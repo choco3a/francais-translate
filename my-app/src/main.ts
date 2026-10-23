@@ -1,21 +1,24 @@
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <h1>フランス語の学習</h1>
-  <div class="container translation" >
-    
+  <div class="container">
     <div class="japanese-side">
       <p class="language-label">日本語</p>
       <textarea type="text" id="japanese"></textarea>
-      <button id="translation">翻訳</button>
+      <button id="clear_button">×</button>
     </div>
+
     <div>
-      <p>→</p>
+      <p class="language-label">→</p>
+      <button id="translation">翻訳</button>
     </div>
     <div class="france-side">
       <p class="language-label">フランス語</p>
       <textarea type="text" id="francais"></textarea>
-      <button id="speak-input-button">🔊 読み上げ</button>
     </div>
-    <button id="keep-button">☆</button>
+    <div class="right">
+      <button id="speak-input-button">🔊 読み上げ</button>
+      <button id="keep-button">☆</button>
+    </div>
   </div>
   <ul id="translation-list"></ul>`
 
@@ -25,6 +28,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   const translationList = document.querySelector<HTMLUListElement>('#translation-list')!;
   const speakInputButton = document.querySelector<HTMLButtonElement>('#speak-input-button')!;
   const translateButton = document.querySelector<HTMLButtonElement>('#translation')!;
+  const clearButton = document.querySelector<HTMLButtonElement>('#clear_button')!;
 
   type Keeplist = {
     japaneseText: string;
@@ -42,6 +46,11 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       showKeep(element);
     });
   };
+
+  clearButton.addEventListener('click', () => {
+    francais.value = '';
+    japanese.value = '';
+  });
 
   translateButton.addEventListener('click', async () => {
     const text = japanese.value.trim();

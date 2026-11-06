@@ -1,10 +1,26 @@
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
+function getElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+
+  if(!element){
+    throw new Error(`${selector}が見つかりません`);
+  }
+
+  return element;
+};
+
+
+
+
+const app = getElement<HTMLDivElement>('#app');
+
+
+app.innerHTML = `
   <h1>フランス語の学習</h1>
   <main>
     <div class="container">
       <div class="japanese-side">
         <p class="language-label">日本語</p>
-        <textarea type="text" id="japanese"></textarea>
+        <textarea id="japanese"></textarea>
       </div>
 
       <div>
@@ -13,7 +29,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       </div>
       <div class="france-side">
         <p class="language-label">フランス語</p>
-        <textarea type="text" id="francais"></textarea>
+        <textarea id="francais"></textarea>
       </div>
       <div class="right">
       <button id="clear-button" class='three-button'>×</button>
@@ -24,37 +40,68 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <ul id="translation-list"></ul>
   </main>`
 
-  const japanese = document.querySelector<HTMLTextAreaElement>('#japanese')!;
-  const francais = document.querySelector<HTMLTextAreaElement>('#francais')!;
-  const keepButton = document.querySelector<HTMLButtonElement>('#keep-button')!;
-  const translationList = document.querySelector<HTMLUListElement>('#translation-list')!;
-  const speakInputButton = document.querySelector<HTMLButtonElement>('#speak-input-button')!;
-  const translateButton = document.querySelector<HTMLButtonElement>('#translation')!;
-  const clearButton = document.querySelector<HTMLButtonElement>('#clear-button')!;
+  const japanese = getElement<HTMLTextAreaElement>('#japanese');
+  const francais = getElement<HTMLTextAreaElement>('#francais');
+  const keepButton = getElement<HTMLButtonElement>('#keep-button');
+  const translationList = getElement<HTMLUListElement>('#translation-list');
+  const speakInputButton = getElement<HTMLButtonElement>('#speak-input-button');
+  const translateButton = getElement<HTMLButtonElement>('#translation');
+  const clearButton = getElement<HTMLButtonElement>('#clear-button');
 
-  type Keeplist = {
+  type KeepItem = {
     japaneseText: string;
     francaisText: string;
   };
-  const keeplist:Keeplist[] = [];
+  const keeplist: KeepItem[] = [];
 
   let draggedItem: HTMLLIElement | null = null;
-  const itemByElement = new WeakMap<HTMLLIElement, Keeplist>();
+  const itemByElement = new WeakMap<HTMLLIElement, KeepItem>();
 
   const savedData = localStorage.getItem('keeping');
 
   if(savedData){
-    const currentSetting:Keeplist[] = JSON.parse(savedData);
+    try {
+      const parsedData: unknown = JSON.parse(savedData);
 
-    currentSetting.forEach(element => {
-      keeplist.push(element);
-      showKeep(element);
-    });
-  };
+    if(!Array.isArray(parsedData)){
+      throw new Error('保存データが配列ではありません');
+    }
+
+    for (const item of parsedData){
+      if(
+        typeof item !== 'object' || 
+        item === null ||
+        !('japaneseText' in item) ||
+        !('francaisText' in item) ||
+        typeof item.japaneseText !== 'string' ||
+        typeof item.francaisText !== 'string'
+      ){
+        continue;
+      }
+
+      const keepItem: KeepItem = {
+        japaneseText: item.japaneseText,
+        francaisText: item.francaisText,
+      };  
+      keeplist.push(keepItem);
+      showKeep(keepItem);
+    }
+      localStorage.setItem('keeping', JSON.stringify(keeplist));
+    }catch {
+      localStorage.removeItem('keeping');
+      keeplist.length = 0;
+    }
+    
+  }
+    
+    
+
+    
 
   japanese.addEventListener('keydown', (event) => {
-    if(event.key === 'Enter'){
-      translateButton.focus();
+    if(event.key === 'Enter' && !event.isComposing){
+      event.preventDefault();
+      translateButton.click();
     };
     
   });
@@ -67,13 +114,18 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   translateButton.addEventListener('click', async () => {
     const text = japanese.value.trim();
 
-    if(!text) {
-      return;
-    };
+    if(!text) return;
 
     translateButton.disabled = true;
+    japanese.disabled = true;
 
       try {
+
+        type TranslationResponse = {
+          translation: unknown;
+          error?: unknown;
+        };
+
     const response = await fetch('http://localhost:3001/api/translate', {
       method: 'POST',
       headers: {
@@ -82,10 +134,16 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       body: JSON.stringify({ text }),
     });
 
-    const data = await response.json();
+    const data: TranslationResponse = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error);
+      throw new Error(
+        typeof data.error === 'string' ? data.error : '翻訳に失敗しました。',
+      );
+    }
+
+    if(typeof data.translation !== 'string'){
+      throw new Error('翻訳結果を取得できませんでした。');
     }
 
     francais.value = data.translation;
@@ -93,11 +151,12 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     alert(error instanceof Error ? error.message : '翻訳に失敗しました。');
   } finally {
     translateButton.disabled = false;
+    japanese.disabled = false;
   }
 
   });
 
-  function showKeep(item: Keeplist) {
+  function showKeep(item: KeepItem) {
   const listItem = document.createElement('li');
   itemByElement.set(listItem, item);
   listItem.append(`${item.japaneseText} → ${item.francaisText} `);
@@ -106,8 +165,27 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   speakButton.textContent = '🔊';
 
   speakButton.addEventListener('click', () => {
-    const utterance = new SpeechSynthesisUtterance(item.francaisText);
+    const text = item.francaisText.trim();
+    if(!text || speakButton.disabled)return;
+
+    
+    speakButton.disabled = true;
+
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'fr-FR';
+
+    let resetTimer: number;
+
+    const reset = () => {
+      clearTimeout(resetTimer);
+      speakButton.disabled = false;
+    };
+
+    resetTimer = window.setTimeout(reset, 30_000);
+
+    utterance.onend = reset;
+    utterance.onerror = reset;
+
     speechSynthesis.speak(utterance);
   });
 
@@ -149,12 +227,34 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 }
 
   speakInputButton.addEventListener('click', () => {
-  const utterance = new SpeechSynthesisUtterance(francais.value);
+    const text = francais.value.trim();
+
+    if(!text || speakInputButton.disabled)return;
+
+    speakInputButton.disabled = true;
+
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'fr-FR';
+
+  let resetTimer: number;
+
+  const reset = () => {
+    clearTimeout(resetTimer);
+    speakInputButton.disabled = false;
+  };
+
+  resetTimer = window.setTimeout(reset, 30_000);
+
+  utterance.onend = reset;
+  utterance.onerror = reset;
+
   speechSynthesis.speak(utterance);
 });
 
 translationList.addEventListener('dragover', (event) => {
+
+  
+
   event.preventDefault();
 
   if (!draggedItem) return;
@@ -177,23 +277,33 @@ translationList.addEventListener('drop', (event) => {
 
   const newOrder = Array.from(translationList.children)
     .map((element) => itemByElement.get(element as HTMLLIElement))
-    .filter((item): item is Keeplist => item !== undefined);
+    .filter((item): item is KeepItem => item !== undefined);
 
   keeplist.splice(0, keeplist.length, ...newOrder);
   localStorage.setItem('keeping', JSON.stringify(keeplist));
 });
 
-  keep();
+  // keep();
 
 
-  function keep(){
+  // function keep(){
     keepButton.addEventListener('click', () => {
       const japaneseValue:string = japanese.value.trim();
       const francaisValue:string = francais.value.trim();
-      
-      if (japaneseValue && francaisValue) {
 
-        const newKeep:Keeplist = {
+      if(!japaneseValue || !francaisValue)return;
+
+      const alreadySaved = keeplist.some((item) =>
+        item.japaneseText === japaneseValue &&
+        item.francaisText === francaisValue);
+      
+        if(alreadySaved){
+          console.log('保存済み');
+          alert('この翻訳は保存済み');
+          return;
+        };
+
+        const newKeep:KeepItem = {
           japaneseText:japaneseValue,
           francaisText:francaisValue,
         };
@@ -201,6 +311,5 @@ translationList.addEventListener('drop', (event) => {
         keeplist.push(newKeep);
         showKeep(newKeep);
         localStorage.setItem('keeping', JSON.stringify(keeplist));
-      }
     });
-  }
+  // }

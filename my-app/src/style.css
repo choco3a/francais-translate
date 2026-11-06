@@ -1,22 +1,66 @@
+main {
+  display:grid;
+  grid-template-columns: 1fr 2fr;
+}
 
 .container {
-  width: 1000px;
-  margin: 0 auto;
+  width: auto;
   padding: 20px;
+  display: flex;
+  max-height: 300px;
 }
 
-.translation {
-  display: flex;
-}
+
 
 .language-label {
   text-align: center;
 }
 
+
+
 textarea{
+  max-width: 300px;
   padding: 10px;
-  height: 100px;
+  height: 200px;
+  font-size: 24px;
 }
-#keep-button {
-  height: 100px;
+
+.right {
+  display:grid;
 }
+
+.three-button {
+  height: 30px;
+}
+#clear-button {
+  font-size: 20px;
+}
+
+#translation-list {
+  padding: 30px;
+  max-height: 700px;
+  overflow-y: auto;
+  width: 600px;
+}
+
+
+
+#translation-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drag-handle {
+  margin-left: auto;
+  cursor: grab;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.dragging {
+  background-color: gray;
+};
